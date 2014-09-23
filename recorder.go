@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"math"
 )
 
 var curRecording *Showing
@@ -17,14 +18,15 @@ func Recorder(recordC chan Showing) (err error) {
 		select {
 		case showing := <-recordC:
 			if curRecording != nil {
-				fmt.Printf("Already recording another program %s [%s], waiting until it is finished to start %s [%s]", curRecording.Title, curRecording.End, showing.Title, showing.Start)
-				go func(showing Showing) {
-					time.Sleep(curRecording.End.Sub(timeNow()))
+				fmt.Printf("Already recording another program %s [ends at %s], waiting until it is finished to start %s [began at %s].. currently %s\n", curRecording.Title, curRecording.End, showing.Title, showing.Start, timeNow())
+				go func(curRecording, showing Showing) {
+					time.Sleep(time.Duration(math.Max(float64(time.Second), float64(curRecording.End.Sub(timeNow())))))
 					recordC <- showing
-				}(showing)
+				}(*curRecording, showing)
 				continue
 			}
 
+			curRecording = &showing
 			go record(showing, curRecordingSetter)
 
 		case curRecording = <- curRecordingSetter:
@@ -43,7 +45,6 @@ func record(showing Showing, curRecordingSetter chan<- *Showing) {
 
 	fmt.Printf("Recording %s (started at %s) is now recording (%s), ends at %s\n", showing.Title, showing.Start.Local(), timeNow().Local(), showing.End.Local())
 
-	curRecordingSetter <- &showing
 	defer func() {
 		curRecordingSetter <- nil
 	}()
