@@ -12,6 +12,7 @@ import (
 var curRecording *Showing
 
 func Recorder(recordC chan Showing) (err error) {
+	curRecordingSetter := make(chan *Showing)
 	for {
 		select {
 		case showing := <-recordC:
@@ -24,14 +25,16 @@ func Recorder(recordC chan Showing) (err error) {
 				continue
 			}
 
-			go record(showing)
+			go record(showing, curRecordingSetter)
+
+		case curRecording = <- curRecordingSetter:
 		}
 	}
 
 	return
 }
 
-func record(showing Showing) {
+func record(showing Showing, curRecordingSetter chan<- *Showing) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Error: %s", r)
@@ -40,9 +43,9 @@ func record(showing Showing) {
 
 	fmt.Printf("Recording %s (started at %s) is now recording (%s), ends at %s\n", showing.Title, showing.Start.Local(), timeNow().Local(), showing.End.Local())
 
-	curRecording = &showing
+	curRecordingSetter <- &showing
 	defer func() {
-		curRecording = nil
+		curRecordingSetter <- nil
 	}()
 
 	args := getSlingArgs()
@@ -85,7 +88,7 @@ func record(showing Showing) {
 
 	if showing.End.Sub(timeNow()) > 30*time.Second {
 		fmt.Println("Exited early, trying again")
-		record(showing)
+		record(showing, curRecordingSetter)
 	}
 }
 
