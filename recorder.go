@@ -40,7 +40,7 @@ func record(showing Showing) {
 
 	fmt.Printf("Recording %s (started at %s) is now recording (%s), ends at %s\n", showing.Title, showing.Start.Local(), timeNow().Local(), showing.End.Local())
 
-	curRecording = showing
+	curRecording = &showing
 	defer func() {
 		curRecording = nil
 	}()
