@@ -71,6 +71,11 @@ func record(showing Showing, curRecordingSetter chan<- *Showing) {
 
 	cmd := exec.Command(bin, args...)
 
+	if err := cmd.Start(); err != nil {
+		fmt.Println("Could not start recorder:", err)
+		return
+	}
+
 	// NOTE: $dur param to perl script was not working properly (quick glance shows they are counting based on packets, which Sling adapter may screw up)
 	go func() {
 		time.Sleep(showing.End.Sub(timeNow()))
@@ -83,11 +88,12 @@ func record(showing Showing, curRecordingSetter chan<- *Showing) {
 		}
 	}()
 
-	if err := cmd.Run(); err != nil && !strings.Contains(err.Error(), "signal: killed") {
+	if err := cmd.Wait(); err != nil && !strings.Contains(err.Error(), "signal: killed") {
 		fmt.Println("Error running: ", err)
 	}
 
 	if showing.End.Sub(timeNow()) > 30*time.Second {
+		time.Sleep(time.Second)
 		fmt.Println("Exited early, trying again")
 		record(showing, curRecordingSetter)
 	}
