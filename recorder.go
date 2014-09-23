@@ -43,7 +43,7 @@ func record(showing Showing) {
 
 	args := getSlingArgs()
 
-	filename := genFilename(showing, 0)
+	filename, finalFilename := genFilename(showing, 0)
 
 //	secsLeft := showing.End.Sub(timeNow()) / time.Second
 //	if secsLeft < 0 {
@@ -69,6 +69,10 @@ func record(showing Showing) {
 		if err := cmd.Process.Kill(); err != nil {
 			fmt.Println("Could not kill process: ", err.Error())
 		}
+
+		if err := StartJobs(filename, finalFilename); err != nil {
+			fmt.Println("Could not finish jobs: " + err.Error())
+		}
 	}()
 
 	if err := cmd.Run(); err != nil && !strings.Contains(err.Error(), "signal: killed") {
@@ -93,10 +97,12 @@ func getSlingArgs() (args []string) {
 	return
 }
 
-func genFilename(showing Showing, ver int) string {
-	filename := fmt.Sprintf("%s/%s - %s", config.RecordingDir, showing.Title, showing.Start.Local().Format("2006-01-02 3:04PM"))
+func genFilename(showing Showing, ver int) (string, string) {
+	finalFilename := fmt.Sprintf("%s/Raw - %s - %s", config.RecordingDir, showing.Title, showing.Start.Local().Format("2006-01-02 3:04PM"))
+	filename := fmt.Sprintf("%s/Raw - %s - %s", config.RecordingDir, showing.Title, showing.Start.Local().Format("2006-01-02 3:04PM"))
 	if showing.Title != showing.Subtitle {
 		filename += ": " + showing.Subtitle
+		finalFilename += ": " + showing.Subtitle
 	}
 
 	if ver > 100 {
@@ -105,12 +111,14 @@ func genFilename(showing Showing, ver int) string {
 
 	if ver > 0 {
 		filename += fmt.Sprintf(" (part %d)", ver + 1)
+		finalFilename += fmt.Sprintf(" (part %d)", ver + 1)
 	}
 
 	filename += ".asf"
+	finalFilename += ".mp4"
 
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		return filename
+		return filename, finalFilename
 	} else {
 		return genFilename(showing, ver + 1)
 	}
