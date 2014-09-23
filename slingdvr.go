@@ -28,11 +28,10 @@ func main() {
 	}()
 
 	if *forceTime != "" {
+		const timeMultiple = 1
 		for {
-			time.Sleep(5 * time.Second)
-			*forceTime = timeNow().Add(30 * 60 * time.Second).Format(time.RFC3339)
-
-			refreshScheduleC <- struct{}{}
+			time.Sleep(timeMultiple * time.Second)
+			*forceTime = timeNow().Add(timeMultiple * time.Second).Format(time.RFC3339)
 		}
 	} else {
 		for {

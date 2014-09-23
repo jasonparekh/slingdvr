@@ -2,27 +2,25 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
-	"os/exec"
-	"os"
-	"path/filepath"
 )
 
-var recordings = make(map[Showing]bool)
-var isRecording bool
+var curRecording *Showing
 
-func Recorder(recordC <-chan Showing) (err error) {
+func Recorder(recordC chan Showing) (err error) {
 	for {
 		select {
 		case showing := <-recordC:
-			if _, ok := recordings[showing]; ok {
-				fmt.Println("Already recording this show, skipping")
-				continue
-			}
-
-			if isRecording {
-				fmt.Println("Already recording another program, skipping ", showing.Title)
+			if curRecording != nil {
+				fmt.Printf("Already recording another program %s [%s], waiting until it is finished to start %s [%s]", curRecording.Title, curRecording.End, showing.Title, showing.Start)
+				go func(showing Showing) {
+					time.Sleep(curRecording.End.Sub(timeNow()))
+					recordC <- showing
+				}(showing)
 				continue
 			}
 
@@ -42,21 +40,19 @@ func record(showing Showing) {
 
 	fmt.Printf("Recording %s (started at %s) is now recording (%s), ends at %s\n", showing.Title, showing.Start.Local(), timeNow().Local(), showing.End.Local())
 
-	isRecording = true
-	recordings[showing] = true
+	curRecording = showing
 	defer func() {
-		isRecording = false
-		recordings[showing] = false
+		curRecording = nil
 	}()
 
 	args := getSlingArgs()
 
 	filename, finalFilename := genFilename(showing, 0)
 
-//	secsLeft := showing.End.Sub(timeNow()) / time.Second
-//	if secsLeft < 0 {
-//		secsLeft = 1
-//	}
+	//	secsLeft := showing.End.Sub(timeNow()) / time.Second
+	//	if secsLeft < 0 {
+	//		secsLeft = 1
+	//	}
 	args = append(args, "-output", filename)
 
 	bin := fmt.Sprintf("%s/rec350.pl", filepath.Dir(os.Args[0]))
@@ -87,7 +83,7 @@ func record(showing Showing) {
 		fmt.Println("Error running: ", err)
 	}
 
-	if showing.End.Sub(timeNow()) > 30 * time.Second {
+	if showing.End.Sub(timeNow()) > 30*time.Second {
 		fmt.Println("Exited early, trying again")
 		record(showing)
 	}
@@ -99,7 +95,7 @@ func getSlingArgs() (args []string) {
 			continue
 		}
 
-		args = append(args, "-" + strings.ToLower(k[5:6]) + k[6:], fmt.Sprintf("%s", v))
+		args = append(args, "-"+strings.ToLower(k[5:6])+k[6:], fmt.Sprintf("%s", v))
 	}
 
 	return
@@ -118,8 +114,8 @@ func genFilename(showing Showing, ver int) (string, string) {
 	}
 
 	if ver > 0 {
-		filename += fmt.Sprintf(" (part %d)", ver + 1)
-		finalFilename += fmt.Sprintf(" (part %d)", ver + 1)
+		filename += fmt.Sprintf(" (part %d)", ver+1)
+		finalFilename += fmt.Sprintf(" (part %d)", ver+1)
 	}
 
 	filename += ".asf"
@@ -128,6 +124,6 @@ func genFilename(showing Showing, ver int) (string, string) {
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		return filename, finalFilename
 	} else {
-		return genFilename(showing, ver + 1)
+		return genFilename(showing, ver+1)
 	}
 }
