@@ -10,13 +10,19 @@ import (
 )
 
 var recordings = make(map[Showing]bool)
+var isRecording bool
 
 func Recorder(recordC <-chan Showing) (err error) {
 	for {
 		select {
 		case showing := <-recordC:
 			if _, ok := recordings[showing]; ok {
-				fmt.Println("Already recording, skipping")
+				fmt.Println("Already recording this show, skipping")
+				continue
+			}
+
+			if isRecording {
+				fmt.Println("Already recording another program, skipping ", showing.Title)
 				continue
 			}
 
@@ -36,8 +42,10 @@ func record(showing Showing) {
 
 	fmt.Printf("Recording %s (started at %s) is now recording (%s), ends at %s\n", showing.Title, showing.Start.Local(), timeNow().Local(), showing.End.Local())
 
+	isRecording = true
 	recordings[showing] = true
 	defer func() {
+		isRecording = false
 		recordings[showing] = false
 	}()
 
@@ -98,7 +106,7 @@ func getSlingArgs() (args []string) {
 }
 
 func genFilename(showing Showing, ver int) (string, string) {
-	finalFilename := fmt.Sprintf("%s/Raw - %s - %s", config.RecordingDir, showing.Title, showing.Start.Local().Format("2006-01-02 3:04PM"))
+	finalFilename := fmt.Sprintf("%s/%s - %s", config.RecordingDir, showing.Title, showing.Start.Local().Format("2006-01-02 3:04PM"))
 	filename := fmt.Sprintf("%s/Raw - %s - %s", config.RecordingDir, showing.Title, showing.Start.Local().Format("2006-01-02 3:04PM"))
 	if showing.Title != showing.Subtitle {
 		filename += ": " + showing.Subtitle
