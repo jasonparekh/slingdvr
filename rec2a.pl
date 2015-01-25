@@ -20,10 +20,12 @@ $dur = 0;                       # duration in seconds you want to capture
 $chan = '';                     # tune to a channel before capture
 $output = "rec2.asf";           # output file (use -stdout option for stdout)
 $irparm = 2;			# change this to 2 if you get cmd 135 errors
+$selectonly = 0;		# send select and exit
 $stdout = 0;
 
 # Parse command line arguments
 my $ok = GetOptions(
+   "selectonly=s" => sub {$selectonly = $_[1];},
    "chan=s"   => sub {$chan = $_[1];},
    "dur=s"    => sub {$dur = $_[1];},
    "hd=s"     => sub {$hd = $_[1];},
@@ -64,6 +66,13 @@ if ($stat) {                        # box in use
 }
 sling_cmd(0xa6, pack("v10 x76", 0x1cf, 0, 0x40, 0x10, 0x5000, 0x180, 1, 0x1e,
                       0, 0x3d));
+if ($selectonly) {
+    $ircmds = pack("v2", 42, 500);
+    $irpad = 472 - length($ircmds);
+    sling_cmd(0x87, $ircmds . pack("x$irpad v4", $irparm, 0, 0, 0));
+    exit(0);
+}
+
 if ($chan) {         # want to tune to a channel
     $ircmds = '';
     for $chdigit (split(//, $chan)) {
@@ -199,4 +208,5 @@ sub useage {
    print "-sleep secs           wait this many seconds before starting capture(defaults to 0)\n";
    print "-dur secs             capture only this many seconds (defaults to unlimited)\n";
    print "-chan channelNum      tune to this channel before capturing\n";
+   print "-selectonly           send the select button and exit\n";
 }

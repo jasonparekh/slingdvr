@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
-	"math"
 )
 
 var curRecording *Showing
@@ -27,16 +28,16 @@ func Recorder(recordC chan Showing) (err error) {
 			}
 
 			curRecording = &showing
-			go record(showing, curRecordingSetter)
+			go record(showing, curRecordingSetter, showing.End)
 
-		case curRecording = <- curRecordingSetter:
+		case curRecording = <-curRecordingSetter:
 		}
 	}
 
 	return
 }
 
-func record(showing Showing, curRecordingSetter chan<- *Showing) {
+func record(showing Showing, curRecordingSetter chan<- *Showing, endTime time.Time) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Error: %s", r)
@@ -45,9 +46,11 @@ func record(showing Showing, curRecordingSetter chan<- *Showing) {
 
 	fmt.Printf("Recording %s (started at %s) is now recording (%s), ends at %s\n", showing.Title, showing.Start.Local(), timeNow().Local(), showing.End.Local())
 
-	defer func() {
-		curRecordingSetter <- nil
-	}()
+	if curRecordingSetter != nil {
+		defer func() {
+			curRecordingSetter <- nil
+		}()
+	}
 
 	args := getSlingArgs()
 
@@ -59,9 +62,9 @@ func record(showing Showing, curRecordingSetter chan<- *Showing) {
 	//	}
 	args = append(args, "-output", filename)
 
-	bin := fmt.Sprintf("%s/rec350.pl", filepath.Dir(os.Args[0]))
+	bin := fmt.Sprintf("%s/rec2a.pl", filepath.Dir(os.Args[0]))
 	if _, err := os.Stat(bin); os.IsNotExist(err) {
-		bin, err = filepath.Abs("rec350.pl")
+		bin, err = filepath.Abs("rec2a.pl")
 		if err != nil {
 			panic(err)
 		}
@@ -76,9 +79,12 @@ func record(showing Showing, curRecordingSetter chan<- *Showing) {
 		return
 	}
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	// NOTE: $dur param to perl script was not working properly (quick glance shows they are counting based on packets, which Sling adapter may screw up)
 	go func() {
-		time.Sleep(showing.End.Sub(timeNow()))
+		defer wg.Done()
+		time.Sleep(endTime.Sub(timeNow()))
 		if err := cmd.Process.Kill(); err != nil {
 			fmt.Println("Could not kill process: ", err.Error())
 		}
@@ -92,11 +98,13 @@ func record(showing Showing, curRecordingSetter chan<- *Showing) {
 		fmt.Println("Error running: ", err)
 	}
 
-	if showing.End.Sub(timeNow()) > 30*time.Second {
+	if endTime.Sub(timeNow()) > 30*time.Second {
 		time.Sleep(time.Second)
 		fmt.Println("Exited early, trying again")
-		record(showing, curRecordingSetter)
+		record(showing, curRecordingSetter, endTime)
 	}
+
+	wg.Wait()
 }
 
 func getSlingArgs() (args []string) {

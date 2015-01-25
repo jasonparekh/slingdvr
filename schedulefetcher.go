@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
 )
+
+var dumpSchedule = flag.Bool("dumpSchedule", false, "Dumps the schedule and exits")
 
 type RawScheduleContainer struct {
 	ReqPack struct {
@@ -51,10 +54,9 @@ func FetchSchedule() (showings []Showing, err error) {
 	}
 
 	for _, rawShowing := range container.ReqPack.XmlFile.TimerList.DTimer {
-		// Chop off the last token (I think it's day-of-week, not sure)
-		startTimeStr := rawShowing.TmPeriod.StartTime[:len(rawShowing.TmPeriod.StartTime)-2]
 		var startTime time.Time
-		if startTime, err = time.ParseInLocation("15:4:5:1:2:2006", startTimeStr, time.UTC); err != nil {
+		startTime, err = parseDateStr(rawShowing.TmPeriod.StartTime)
+		if err != nil {
 			return
 		}
 
@@ -68,6 +70,7 @@ func FetchSchedule() (showings []Showing, err error) {
 			rawShowing.Id,
 			startTime,
 			endTime,
+			"",
 		}
 		showings = append(showings, showing)
 	}
